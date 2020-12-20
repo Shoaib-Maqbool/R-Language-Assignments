@@ -1,0 +1,248 @@
+---
+title: "Assignment 1"
+author: "Shoaib Maqbool"
+
+---
+Reading the Data in the chunk below 
+
+Task 1.1
+```{r reading data and managing the headers}
+library(tidyverse)
+library(ggplot2)
+#install.packages("fitdistrplus")
+
+ed_data_link <- 'govhack3.csv'
+top_row <- read_csv(ed_data_link, col_names = FALSE, n_max = 1)
+second_row <- read_csv(ed_data_link, n_max = 1)
+
+column_names <- second_row %>% 
+  unlist(., use.names=FALSE) %>% 
+  make.unique(., sep = "__") # double underscore
+
+column_names[2:8] <- str_c(column_names[2:8], '0', sep='__')
+
+daily_attendance <- 
+  read_csv(ed_data_link, skip = 2, col_names = column_names)
+
+```
+
+Task 1.2
+
+A. Their are 64 columns and 365 rows.
+B. Their are a total of 9 hospitals in the data.
+C. Their are multiple double and character data types in the data set.
+D. The dataset covers the time period from 1st July 2013 till 30th June 2014.
+
+
+
+
+```{r Task 1.2}
+
+#how many hospitals are in the data
+new_top_row = vector()
+for (i in top_row){
+  if (is.character(i)){
+    new_top_row = c(new_top_row,i)
+  }
+}
+print(new_top_row)
+
+#What time period does the data cover?
+#As the date variable is sorted
+print("Start Date:")
+print(daily_attendance[1,1])
+print("End Date:")
+print(daily_attendance[365,1])
+
+```
+
+```{r Task 2}
+
+#Task 2.2.1 answers in the word report
+
+
+
+#Task 2.2.2
+# I have used one gather and one spread function to re-arrange the data.
+
+#Following is the code for gather
+daily_attendance_1= daily_attendance %>%
+  gather(key = 'Facility',
+         value = value,-Date,
+         na.rm = FALSE) %>% 
+  replace_na(list(cases = 0))
+         
+
+#Separating the facility from the ID
+daily_attendance_1= daily_attendance_1 %>%
+  separate(col = Facility, 
+           into = c("Status", "Facility_ID"), 
+           sep = "__",
+           fill='left' )
+
+
+#Converting the facility ID from Char to Integer
+daily_attendance_1$Facility_ID = as.integer(daily_attendance_1$Facility_ID)
+
+
+#Based on Facility ID, accessing the Facility Name
+daily_attendance_1 = daily_attendance_1 %>%
+  mutate(Facility_Name = case_when(Facility_ID == 0 ~ new_top_row[1],
+                                   Facility_ID == 1 ~ new_top_row[2],
+                                   Facility_ID == 2 ~ new_top_row[3],
+                                   Facility_ID == 3 ~ new_top_row[4],
+                                   Facility_ID == 4 ~ new_top_row[5],
+                                   Facility_ID == 5 ~ new_top_row[6],
+                                   Facility_ID == 6 ~ new_top_row[7],
+                                   Facility_ID == 7 ~ new_top_row[8],
+                                   Facility_ID == 8 ~ new_top_row[9]
+                                   
+                                   ))
+
+#Spreading the data according to value
+daily_attendance_1 = daily_attendance_1 %>%
+  spread(Status,value)
+#Deleting the facility ID column
+daily_attendance_1 = daily_attendance_1[,-2]
+
+#Task 2.2.3
+
+#Converting the data according to the required formats.
+daily_attendance_1$Date = as.factor(daily_attendance_1$Date)
+daily_attendance_1$Admissions = as.integer(daily_attendance_1$Admissions)
+daily_attendance_1$Attendance = as.integer(daily_attendance_1$Attendance)
+daily_attendance_1$Tri_1 = as.integer(daily_attendance_1$Tri_1)
+daily_attendance_1$Tri_2 = as.integer(daily_attendance_1$Tri_2)
+daily_attendance_1$Tri_3 = as.integer(daily_attendance_1$Tri_3)
+daily_attendance_1$Tri_4 = as.integer(daily_attendance_1$Tri_4)
+daily_attendance_1$Tri_5 = as.integer(daily_attendance_1$Tri_5)
+
+#Task 2.2.4
+#Replacing the NA values with 0
+daily_attendance_1[is.na(daily_attendance_1)] = 0
+print(daily_attendance_1)
+```
+
+
+
+```{r Task 3 (Exploratory Data Analysis)}
+#Task 3.1
+#Selecting the Hospital
+Royal_perth_hosp = daily_attendance_1 %>% 
+  filter(Facility_Name == 'Royal Perth Hospital')
+
+print('Hospital name: ')
+print(Royal_perth_hosp$Facility_Name[1])
+
+print('Total Attendances: ')
+print(sum(Royal_perth_hosp$Attendance))
+
+print("Total Admissions:")
+print(sum(Royal_perth_hosp$Admissions))
+
+
+#Task 3.2
+ 
+ggplot(Royal_perth_hosp,aes(Royal_perth_hosp$Attendance)) + 
+  geom_bar(color="blue", fill=rgb(0.1,0.4,0.5,0.7)) 
+
+
+#Task 3.3
+#Converting the Date into Date Data type
+Royal_perth_hosp$Date = as.Date(Royal_perth_hosp$Date, format ="%d-%b-%y")
+
+#Based on the dates, I am fetching the respective weekdays.
+myweekdays = vector()
+for (i in as.list(Royal_perth_hosp$Date)){
+  i = weekdays(i)
+  myweekdays = c(myweekdays,i)
+}
+
+#Adding the weekdays column in the data frame
+Royal_perth_hosp = Royal_perth_hosp %>%
+  mutate(Weekday = myweekdays)
+head(Royal_perth_hosp)
+
+#Getting mean of attendance grouped by weekday
+weekDay_Attendance = Royal_perth_hosp %>% 
+  group_by(Weekday) %>% 
+  summarise(Avg_Attendence = mean(Attendance))
+
+#Ordering the weekdays
+ordered_weekdays = c('Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday')
+weekDay_Attendance = weekDay_Attendance %>%
+  slice(match(ordered_weekdays,Weekday))
+
+#Converting the Average weekday attendance into a vector followed by its plot
+myvector = vector()
+for( i in weekDay_Attendance[2]){
+  myvector = c(myvector,i)
+}
+#tried to implement ggplot2 but it wa showing an error. Upon research I found out their are some bugs in ggplot line chart function.
+plot(1:7,myvector,type = 'o',xlab = weekDay_Attendance[1],col='blue')
+
+
+#task 3.4
+library(fitdistrplus)
+library(magrittr)
+
+#Cullen and Frey graph with discrete variable to identify the best fit distribution 
+Royal_perth_hosp %$%
+  descdist(Royal_perth_hosp$Attendance, boot = 200,discrete = TRUE)
+#Generating Sample
+set.seed(4)
+sample_Royal_perth_hosptal = sample_n(Royal_perth_hosp,200)
+print(sample_Royal_perth_hosptal)
+```
+
+
+```{r task 4}
+
+#Task 4.1
+
+#Implementation of poisson distribution
+estimate <- sample_Royal_perth_hosptal %$%
+  fitdist(data = Tri_2, 
+          distr = "pois", discrete = TRUE)
+
+estimate %>% 
+  plot
+
+estimate %>% 
+  cdfcomp
+
+estimate %>% 
+  denscomp()
+
+#Implementation of negative binomial
+estimate2 <- sample_Royal_perth_hosptal %$%
+  fitdist(data = Tri_2, 
+          distr = "nbinom", discrete = TRUE)
+
+
+estimate2 %>% 
+  plot
+
+estimate2 %>% 
+  cdfcomp
+
+estimate2 %>% 
+  denscomp()
+
+#Task 4.2
+
+# Comparing with LogLikelihood.
+print(estimate$loglik)
+
+print(estimate2$loglik)
+
+
+```
+
+
+```{r}
+```
+
+
+
+
